@@ -9,9 +9,21 @@ class SpellCheck
     private $query;
     private $candidates;
     
+    private $fileLoadTime = 0;
+    private $removeCharTime = 0;
+    private $swapCharTime = 0;
+    private $replaceCharTime = 0;
+    private $addCharTime = 0;
+    
     public function __construct() {
+       $time_start = microtime(true);
+    
        $this->words = file_get_contents($this->filename);
        $this->wordList = $this->wordCount($this->words);
+       
+       $time_end = microtime(true);
+       
+       $this->fileLoadTime = $time_end - $time_start;
     }
 
     function minLength($word) {
@@ -28,14 +40,25 @@ class SpellCheck
         $this->query = $query;
         $this->candidates = array_unique($this->candidates());
         
-        //print_r($this->candidates);
-        // exit;
+        /*
+        print_r($this->fileLoadTime);
+        print_r($this->removeCharTime);
+        print_r($this->swapCharTime);
+        print_r($this->replaceCharTime);
+        print_r($this->addCharTime);
+        //exit;
+        
+        */
+        
+        // filter out nonsense
+        $this->candidates = array_intersect($this->candidates, array_keys($this->wordList));
 
-        return array_filter($this->wordList, array($this, "containsWord"), ARRAY_FILTER_USE_KEY);
+        return array_filter($this->wordList, function($testWord) { return in_array($testWord, $this->candidates); }, ARRAY_FILTER_USE_KEY);
+        //array($this, "containsWord")
     }
 
     function containsWord($testword) {
-        return array_key_exists($testword, $this->wordList) && in_array($testword, $this->candidates);
+        return in_array($testword, $this->candidates); // && array_key_exists($testword, $this->wordList);
     }
 
     function probability($word) {
@@ -48,8 +71,8 @@ class SpellCheck
     function candidates() {
         return array_merge(
             $this->known($this->query),
-            $this->edits1($this->query)//,
-            //$this->edits2($this->query)
+            $this->edits1($this->query),
+            $this->edits2($this->query)
         );
     }
 
@@ -71,25 +94,37 @@ class SpellCheck
         
         $splitlength = count($splits);
         for ($i = 0; $i < $splitlength-1; $i++) {
-            // remove a character
-            $returnArray[] = $splits[$i][0].$splits[$i+1][1];
+            $time_start = microtime(true);
+                // remove a character
+                $returnArray[] = $splits[$i][0].$splits[$i+1][1];
+            $time_end = microtime(true);
+            $this->removeCharTime += ($time_end - $time_start);
             
-            // swap 2 characters
-            $newEnd = $splits[$i][1];
-            $newEnd = strrev(mb_substr($newEnd, 0, 2)).mb_substr($newEnd, 2);
-            $returnArray[] = $splits[$i][0].$newEnd;
+            $time_start = microtime(true);
+                // swap 2 characters
+                $newEnd = $splits[$i][1];
+                $newEnd = strrev(mb_substr($newEnd, 0, 2)).mb_substr($newEnd, 2);
+                $returnArray[] = $splits[$i][0].$newEnd;
+            $time_end = microtime(true);
+            $this->swapCharTime += ($time_end - $time_start);
             
             $charArr = str_split($letters);
             
             // replace a character
+            $time_start = microtime(true);
             for ($j = 0; $j < count($charArr); $j++) {
                 $returnArray[] = $splits[$i][0].$charArr[$j].$splits[$i+1][1];
             }
+            $time_end = microtime(true);
+            $this->replaceCharTime += ($time_end - $time_start);
             
             // add a character
+            $time_start = microtime(true);
             for ($j = 0; $j < count($charArr); $j++) {
                 $returnArray[] = $splits[$i][0].$charArr[$j].$splits[$i][1];
             }
+            $time_end = microtime(true);
+            $this->addCharTime += ($time_end - $time_start);
         }
         return array_values(array_unique($returnArray));
     }
@@ -98,7 +133,7 @@ class SpellCheck
         $edit1words = $this->edits1($words);
         
         $returnArray = array();
-        for($i = 0; $i < count($edit1words)-1; $i++) {
+        for($i = 0; $i < count($edit1words); $i++) {
             $firstEditWord = $edit1words[$i];
         
             $returnArray = array_merge($returnArray, $this->edits1($firstEditWord));
@@ -112,8 +147,10 @@ class SpellCheck
 
 $spellcheck = new SpellCheck();
 
+$word = $argv[1];
 
-print_r($spellcheck->correction("boken"));
+
+print_r($spellcheck->correction($word));
 
 
 ?>
