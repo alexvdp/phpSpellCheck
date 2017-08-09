@@ -2,60 +2,93 @@
 
 class SpellCheck
 {
+  
+    /**
+     * Minimal word size
+     */
+    const MINWORDSIZE = 2;
+  
+    /**
+     * file containing loads of text
+     * 
+     * @var String 
+     */
     private $filename = "big.txt";
 
-    private $words;
+    /**
+     * Array containing 'word' -> #occurences
+     * 
+     * @var array 
+     */
     private $wordList;
+    
+    /**
+     * user input
+     *
+     * @var string 
+     */
     private $query;
+    
+    /**
+     * Array containing list of candidate words (user word with edits)
+     *
+     * @var array
+     */
     private $candidates;
-    
-    private $fileLoadTime = 0;
-    private $removeCharTime = 0;
-    private $swapCharTime = 0;
-    private $replaceCharTime = 0;
-    private $addCharTime = 0;
-    
+
+    /**
+     * load the file and build wordList
+     */
     public function __construct() {
-       $time_start = microtime(true);
-    
-       $this->words = file_get_contents($this->filename);
-       $this->wordList = $this->wordCount($this->words);
-       
-       $time_end = microtime(true);
-       
-       $this->fileLoadTime = $time_end - $time_start;
+       $words = file_get_contents($this->filename);
+       $this->wordList = $this->wordCount($words);
     }
 
+    /**
+     * Is word longer than the minimum length?
+     * 
+     * @param String $word
+     * @return boolean
+     */
     function minLength($word) {
-        return strlen($word) > 2;
+        return strlen($word) > SpellCheck::MINWORDSIZE;
     }
 
+
+    /**
+     * build wordlist from text
+     * 
+     * @param string $text
+     * @return array containing 'word' -> #occurences
+     */
     function wordCount($text) {
-        $return = array_count_values(array_filter(str_word_count(strtolower(str_replace("'","",str_replace("--"," ",$text))), 1, "1234567890-_"), array($this, "minLength")));
-        
-        return $return;
+        return array_count_values(array_filter(str_word_count(strtolower(str_replace("'","",str_replace("--"," ",$text))), 1, "1234567890-_"), array($this, "minLength")));
     }
-    
+
+    /**
+     * find and return valid candidate words
+     * 
+     * @param string $query
+     * @return array containing 'word' -> #probability
+     */
     function correction($query) {
         $this->query = $query;
         $this->candidates = $this->getCandidates();
-        sort($this->candidates);
- 
+        sort($this->candidates);  // reIndex
+
         $ret = array();
         for ($i = 0; $i < count($this->candidates); $i++) {
             $ret[$this->candidates[$i]] = number_format((float)$this->probability($this->candidates[$i]), 6, '.', '');
         }
-        
         return $ret;
-
-        // slow part
-        //return array_filter($this->wordList, function($testWord) { return in_array($testWord, $this->candidates); }, ARRAY_FILTER_USE_KEY);
     }
 
-    function containsWord($testword) {
-        return in_array($testword, $this->candidates);
-    }
-
+    /**
+     * calculate probability of word
+     * 
+     * @param string $word
+     * @return int
+     */
     function probability($word) {
         if (array_key_exists($word, $this->wordList)) {
             return $this->wordList[$word]  / array_sum($this->wordList);
@@ -63,6 +96,11 @@ class SpellCheck
         return 0;
     }
 
+    /**
+     * get candidate wordlist
+     * 
+     * @return array
+     */
     function getCandidates() {
         return array_intersect(
                     array_unique(
@@ -75,87 +113,85 @@ class SpellCheck
                 );
     }
 
+    /**
+     * get known word (test word without corrections)
+     * 
+     * @param string $words
+     * @return array containing words
+     */
     function known($words) {
         $wordList = array_keys($this->wordCount($words));
         return $wordList;
     }
-    
+
+    /**
+     * get 1-edit words (test word with 1 corrections)
+     * 
+     * @param string $words
+     * @return array containing words
+     */
     function edits1($words) {
         $returnArray = array();
-    
+
         $letters = "abcdefghijlkmnopqrstuvwxyz";
-        
+
         $splits = array();
         $length = mb_strlen($words, "UTF-8");
         for ($i = 0; $i < $length; $i ++) {
             $splits[] = array(mb_substr($words, 0, $i, "UTF-8"), mb_substr($words, $i, $length-$i, "UTF-8"));
         }
-        
+
         $splitlength = count($splits);
         for ($i = 0; $i < $splitlength-1; $i++) {
-            $time_start = microtime(true);
-                // remove a character
-                $returnArray[] = $splits[$i][0].$splits[$i+1][1];
-            $time_end = microtime(true);
-            $this->removeCharTime += ($time_end - $time_start);
-            
-            $time_start = microtime(true);
-                // swap 2 characters
-                $newEnd = $splits[$i][1];
-                $newEnd = strrev(mb_substr($newEnd, 0, 2)).mb_substr($newEnd, 2);
-                $returnArray[] = $splits[$i][0].$newEnd;
-            $time_end = microtime(true);
-            $this->swapCharTime += ($time_end - $time_start);
-            
+            // remove a character
+            $returnArray[] = $splits[$i][0].$splits[$i+1][1];
+
+            // swap 2 characters
+            $newEnd = $splits[$i][1];
+            $newEnd = strrev(mb_substr($newEnd, 0, 2)).mb_substr($newEnd, 2);
+            $returnArray[] = $splits[$i][0].$newEnd;
+
             $charArr = str_split($letters);
-            
+
             // replace a character
-            $time_start = microtime(true);
             for ($j = 0; $j < count($charArr); $j++) {
                 $returnArray[] = $splits[$i][0].$charArr[$j].$splits[$i+1][1];
             }
-            $time_end = microtime(true);
-            $this->replaceCharTime += ($time_end - $time_start);
-            
+
             // add a character
-            $time_start = microtime(true);
             for ($j = 0; $j < count($charArr); $j++) {
                 $returnArray[] = $splits[$i][0].$charArr[$j].$splits[$i][1];
             }
-            $time_end = microtime(true);
-            $this->addCharTime += ($time_end - $time_start);
         }
         // add char at end
         for ($j = 0; $j < count($charArr); $j++) {
             $returnArray[] = $words.$charArr[$j];
         }
-        
+
         return array_values(array_unique($returnArray));
     }
-    
+
+    /**
+     * get 2-edit words (test word with 2 corrections)
+     * 
+     * @param string $words
+     * @return array containing words
+     */
     function edits2($words) {
         $edit1words = $this->edits1($words);
-        
         $returnArray = array();
         for($i = 0; $i < count($edit1words); $i++) {
             $firstEditWord = $edit1words[$i];
-        
             $returnArray = array_merge($returnArray, $this->edits1($firstEditWord));
-            
+
         }
-        
         return array_values(array_unique($returnArray));
     }
 
 }
 
 $spellcheck = new SpellCheck();
-
 $word = $argv[1];
-
-
 print_r($spellcheck->correction($word));
 
-
 ?>
-
