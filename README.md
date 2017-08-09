@@ -1,6 +1,6 @@
 # phpSpellCheck
 
-Small spellchecked in PHP,
+Small spellchecker in PHP,
 
 supports:
 
