@@ -38,42 +38,41 @@ class SpellCheck
     
     function correction($query) {
         $this->query = $query;
-        $this->candidates = array_unique($this->candidates());
+        $this->candidates = $this->getCandidates();
+        sort($this->candidates);
+ 
+        $ret = array();
+        for ($i = 0; $i < count($this->candidates); $i++) {
+            $ret[$this->candidates[$i]] = number_format((float)$this->probability($this->candidates[$i]), 6, '.', '');
+        }
         
-        /*
-        print_r($this->fileLoadTime);
-        print_r($this->removeCharTime);
-        print_r($this->swapCharTime);
-        print_r($this->replaceCharTime);
-        print_r($this->addCharTime);
-        //exit;
-        
-        */
-        
-        // filter out nonsense
-        $this->candidates = array_intersect($this->candidates, array_keys($this->wordList));
+        return $ret;
 
-        return array_filter($this->wordList, function($testWord) { return in_array($testWord, $this->candidates); }, ARRAY_FILTER_USE_KEY);
-        //array($this, "containsWord")
+        // slow part
+        //return array_filter($this->wordList, function($testWord) { return in_array($testWord, $this->candidates); }, ARRAY_FILTER_USE_KEY);
     }
 
     function containsWord($testword) {
-        return in_array($testword, $this->candidates); // && array_key_exists($testword, $this->wordList);
+        return in_array($testword, $this->candidates);
     }
 
     function probability($word) {
         if (array_key_exists($word, $this->wordList)) {
-            return $wordList[$word]  / array_sum($wordList);
+            return $this->wordList[$word]  / array_sum($this->wordList);
         }
         return 0;
     }
 
-    function candidates() {
-        return array_merge(
-            $this->known($this->query),
-            $this->edits1($this->query),
-            $this->edits2($this->query)
-        );
+    function getCandidates() {
+        return array_intersect(
+                    array_unique(
+                        array_merge(
+                            $this->known($this->query),
+                            $this->edits1($this->query),
+                            $this->edits2($this->query)
+                        )
+                    ), array_keys($this->wordList)
+                );
     }
 
     function known($words) {
@@ -126,6 +125,11 @@ class SpellCheck
             $time_end = microtime(true);
             $this->addCharTime += ($time_end - $time_start);
         }
+        // add char at end
+        for ($j = 0; $j < count($charArr); $j++) {
+            $returnArray[] = $words.$charArr[$j];
+        }
+        
         return array_values(array_unique($returnArray));
     }
     
