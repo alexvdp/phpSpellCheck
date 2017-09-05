@@ -21,14 +21,7 @@ class SpellCheck
      * @var array 
      */
     private $wordList;
-    
-    /**
-     * Array containing '#' -> word / sorted
-     * 
-     * @var array 
-     */
-    private $candidateList;
-    
+        
     /**
      * Array containing '#' -> word / sorted
      * 
@@ -56,8 +49,6 @@ class SpellCheck
     public function __construct() {
        $words = file_get_contents($this->filename);
        $this->wordList = $this->wordCount($words);
-       $this->candidateList = array_keys($this->wordList);
-       //sort($this->candidateList);
     }
 
     /**
@@ -199,9 +190,7 @@ class SpellCheck
      * @return array containing words
      */
     function editsTwo() {
-        $recMerge = array();
         $edit1list = $this->variantList;
-        
         for($i = 0; $i < count($edit1list); $i++) {
             $firstEditWord = $edit1list[$i];
             $this->editsOne($firstEditWord);
